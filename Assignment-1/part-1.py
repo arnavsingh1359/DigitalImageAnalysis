@@ -6,21 +6,20 @@ from skimage import exposure
 from scipy.signal import argrelextrema
 import seaborn as sns
 
-# fig, ax = plt.subplots(1, 2)
-
-img = np.array(cv.imread("Pictures\\img_5.png"))
+img = np.array(cv.imread("Pictures/part1/img_5.png"))
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
 
 
-def detect_skin(alpha, beta, hue, sat):
-    result = np.zeros((alpha.shape[0], alpha.shape[1]))
+def detect_skin(alpha, beta, hue, sat, alpha_a=6.5, beta_b=12, sat_min=64, sat_max=192, hue_max=17.1):
+
+    result = np.zeros(alpha.shape)
     p = 0
-    while p < alpha.shape[0]:
+    while p < result.shape[0]:
         q = 0
-        while q < alpha.shape[1]:
-            if ((alpha[p, q, 0] - 143) / 6.5) ** 2 + ((beta[p, q, 0] - 148) / 12) ** 12 < 1:
-                if 64 <= sat[p, q, 0] <= 192 and hue[p, q, 0] <= 17.1:
+        while q < result.shape[1]:
+            if ((alpha[p, q] - 143) / alpha_a) ** 2 + ((beta[p, q] - 148) / beta_b) ** 2 < 1:
+                if sat_min <= sat[p, q] <= sat_max and hue[p, q] <= hue_max:
                     result[p, q] = 1
             q += 1
         p += 1
@@ -28,7 +27,7 @@ def detect_skin(alpha, beta, hue, sat):
     return result
 
 
-def detect_faces(image, scale_factor, min_neighbor):
+def detect_faces(image, scale_factor=1.01, min_neighbor=6):
     face_cascade = cv.CascadeClassifier('haarcascade_frontalface_default.xml')
     faces = face_cascade.detectMultiScale(image, scale_factor, min_neighbor)
     return faces
@@ -51,19 +50,25 @@ def is_bimodal(x, y):
 
 
 def sidelight_correction(image):
-    lum, alpha, beta = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2LAB), 3, axis=2)
+    lum, alpha, beta = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
     hue, sat, value = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2HSV), 3, axis=2)
-    skin_mask = detect_skin(alpha, beta, hue, sat)
-    faces = detect_faces(image, 1.001, 5)
-    for (i, j, w, h) in faces:
-        skin_in_face = skin_mask[j:j + w, i:i + h]
-        p = sns.distplot(lum[j:j + w, i:i + h, 0], bins=256)
-        x, y = p.get_lines()[0].get_data()
-        # plt.plot(x, y)
-        plt.xlim((0, 255))
-        maxima = argrelextrema(y, np.greater)
-        minima = argrelextrema(y, np.less)
-        d, b, m = is_bimodal(x, y)
+    lum = lum[:, :, 0]
+    alpha = alpha[:, :, 0]
+    beta = beta[:, :, 0]
+    hue = hue[:, :, 0]
+    sat = sat[:, :, 0]
+    value = value[:, :, 0]
+    skin_mask = detect_skin(alpha, beta, hue, sat, alpha_a=5, beta_b=20)
+    faces = detect_faces(image, 1.1, 5)
+    for (x, y, w, h) in faces:
+        skin_in_face = skin_mask[y:y + w, x:x + h]
+        p = sns.distplot(lum[y:y + w, x:x + h], bins=256)
+        intensity, density = p.lines[0].get_data()
+        # plt.plot(intensity, density)
+        # plt.xlim((0, 255))
+        maxima = argrelextrema(density, np.greater)
+        minima = argrelextrema(density, np.less)
+        d, b, m = is_bimodal(intensity, density)
         A = np.ones_like(lum)
         if d and b and m:
             f = (b - d) / (m - d)
@@ -71,13 +76,13 @@ def sidelight_correction(image):
             while r < skin_in_face.shape[0]:
                 s = 0
                 while s < skin_in_face.shape[1]:
-                    if skin_in_face[r, s] and lum[j + r, i + s] < m:
-                        A[j + r, i + s] = f
+                    if skin_in_face[r, s] and lum[y + r, x + s] < m:
+                        A[y + r, x + s] = f
                     s += 1
                 r += 1
         final = lum * A
-        # plt.scatter(x[maxima], y[maxima], color='green')
-        # plt.scatter(x[minima], y[minima], color='red')
+        # plt.scatter(intensity[maxima], density[maxima], color='green')
+        # plt.scatter(intensity[minima], density[minima], color='red')
         plt.imshow(final, cmap='gray')
 
 
@@ -108,6 +113,4 @@ sidelight_correction(img)
 # cv.imshow("Image1", img)
 
 # cv.waitKey(0)
-
-
 plt.show()
