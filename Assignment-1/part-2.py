@@ -15,7 +15,21 @@ alpha_gray = np.zeros_like(lum_gray)
 beta_gray = np.zeros_like(lum_gray)
 
 matched = exposure.match_histograms(imggray, lum_color).astype('uint8')
-cv.imshow("Luminance Image", lum_color)
-cv.imshow("Gray Image", imggray)
+
+
+def nbd_stat(lum, window_size=5):
+    result = lum.copy()
+    kernel_mean = np.ones((window_size, window_size)) / (window_size * window_size)
+    mean = cv.filter2D(result, ddepth=-1, kernel=kernel_mean)
+    result = np.sqrt(np.power(result - mean, 2) / window_size)
+
+    return result
+
+
+nbd_color = nbd_stat(lum_color)
+nbd_gray = nbd_stat(matched)
+cv.imshow("STD Image", nbd_gray)
+# cv.imshow("Color Image", lum_color)
+# cv.imshow("Gray Image", imggray)
 cv.imshow("Matched gray Image", matched)
 cv.waitKey(0)
