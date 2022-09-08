@@ -1,6 +1,8 @@
 import cv2 as cv
 import numpy as np
 from skimage import exposure
+import random
+import time
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -14,8 +16,66 @@ lum_gray = imggray
 alpha_gray = np.zeros_like(lum_gray)
 beta_gray = np.zeros_like(lum_gray)
 
-matched = exposure.match_histograms(imggray, lum_color).astype('uint8')
-cv.imshow("Luminance Image", lum_color)
-cv.imshow("Gray Image", imggray)
-cv.imshow("Matched gray Image", matched)
-cv.waitKey(0)
+equalized = exposure.match_histograms(imggray, lum_color).astype('uint8')
+
+
+def nbd_stat(lum, window_size=5):
+    result = lum.copy()
+    kernel_mean = np.ones((window_size, window_size)) / (window_size * window_size)
+    mean = cv.filter2D(result, ddepth=-1, kernel=kernel_mean)
+    result = np.sqrt(np.power(result - mean, 2) / window_size)
+
+    return result
+
+
+def generate_samples(image, nsamples=500):
+    indices = np.empty((nsamples, 2))
+    n = 0
+    while n < nsamples:
+        i = random.randint(0, image.shape[0])
+        j = random.randint(0, image.shape[1])
+        indices[n] = np.array([i, j])
+        n += 1
+
+    return indices
+
+
+def match_color():
+    global lum_color, alpha_color, beta_color, equalized, alpha_gray, beta_gray, nbd_gray, color_samples
+    i = 0
+    while i < equalized.shape[0]:
+        j = 0
+        index_closest = [-1, -1]
+        while j < equalized.shape[1]:
+            l = equalized[i, j] / 2 + nbd_gray[i, j] / 2
+            p = 0
+            closest = np.inf
+            while p < color_samples.shape[0]:
+                indices_x, indices_y = color_samples[p].astype('uint8')
+                if np.abs(l - lum_color[indices_x, indices_y]) < closest:
+                    closest = np.abs(l - lum_color[indices_x, indices_y])
+                    index_closest = [indices_x, indices_y]
+                p += 1
+            alpha_gray[i, j] = alpha_color[index_closest[0], index_closest[1]]
+            beta_gray[i, j] = beta_color[index_closest[0], index_closest[1]]
+            j += 1
+        i += 1
+
+
+nbd_gray = nbd_stat(equalized)
+# print(color_samples)
+# cv.imshow("Color Image", lum_color)
+iteration = 1
+for ite in range(0, iteration):
+    print(f"iteration = {ite}")
+    color_samples = generate_samples(imgcolor)
+    match_color()
+    colorized = np.stack((lum_gray, alpha_gray, beta_gray), axis=2)
+    colorized_bgr = cv.cvtColor(colorized, cv.COLOR_Lab2BGR)
+    # cv.imshow("color matched Image", colorized_bgr)
+    filename = f"Pictures/result/img_1{ite}.png"
+    cv.imwrite(filename, colorized_bgr)
+
+# cv.imshow("Gray Image", imggray)
+# cv.imshow("Matched gray Image", equalized)
+# cv.waitKey(0)
