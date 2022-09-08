@@ -6,12 +6,12 @@ import time
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-imgcolor = np.array(cv.imread("Pictures/part2/img_2a.png"))
+imgcolor = np.array(cv.imread("Pictures/part2/img_1a.png"))
 lum_color, alpha_color, beta_color = np.array_split(cv.cvtColor(imgcolor, cv.COLOR_BGR2LAB), 3, axis=2)
 lum_color = lum_color[:, :, 0]
 alpha_color = alpha_color[:, :, 0]
 beta_color = beta_color[:, :, 0]
-imggray = np.array(cv.imread("Pictures/part2/img_2b.png", 0))
+imggray = np.array(cv.imread("Pictures/part2/img_1b.png", 0))
 lum_gray = imggray
 alpha_gray = np.zeros_like(lum_gray)
 beta_gray = np.zeros_like(lum_gray)
@@ -28,7 +28,7 @@ def nbd_stat(lum, window_size=5):
     return result
 
 
-def generate_samples(image, nsamples=200):
+def generate_samples(image, nsamples=500):
     indices = np.empty((nsamples, 2))
     n = 0
     while n < nsamples:
@@ -62,18 +62,20 @@ def match_color():
         i += 1
 
 
-color_samples = generate_samples(imgcolor)
 nbd_gray = nbd_stat(equalized)
 # print(color_samples)
-time_start = time.time()
-match_color()
-time_end = time.time()
-exe_time = time_end - time_start
-print(exe_time)
-colorized = np.stack((lum_gray, alpha_gray, beta_gray), axis=2)
-colorized_bgr = cv.cvtColor(colorized, cv.COLOR_Lab2BGR)
-cv.imshow("color matched Image", colorized_bgr)
-cv.imshow("Color Image", lum_color)
-cv.imshow("Gray Image", imggray)
+# cv.imshow("Color Image", lum_color)
+iteration = 1
+for ite in range(0, iteration):
+    print(f"iteration = {ite}")
+    color_samples = generate_samples(imgcolor)
+    match_color()
+    colorized = np.stack((lum_gray, alpha_gray, beta_gray), axis=2)
+    colorized_bgr = cv.cvtColor(colorized, cv.COLOR_Lab2BGR)
+    # cv.imshow("color matched Image", colorized_bgr)
+    filename = f"Pictures/result/img_1{ite}.png"
+    cv.imwrite(filename, colorized_bgr)
+
+# cv.imshow("Gray Image", imggray)
 # cv.imshow("Matched gray Image", equalized)
-cv.waitKey(0)
+# cv.waitKey(0)
