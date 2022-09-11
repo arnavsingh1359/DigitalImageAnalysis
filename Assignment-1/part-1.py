@@ -135,11 +135,12 @@ def face_correction(image):
     for index,(x, y, w, h) in enumerate(faces):
         #sidelight correction
         skin_in_face = skin_mask_closed[y:y+h, x:x+w]
-        p = sns.distplot(lum[y:y + h, x:x + w], bins=256)
-        # cv.imwrite(f"{index}.png",skin_in_face)
-        intensity, density = p.lines[0].get_data()
+        data, bins = exposure.histogram(lum[y:y + h, x:x + w], nbins=256)
+        # plt.hist(data, bins)
+        intensity = np.mgrid[0:256]
+        kernel = stats.gaussian_kde(data)
+        density = kernel(intensity)
         # plt.plot(intensity, density)
-    #     # plt.xlim((0, 255))
         maxima = argrelextrema(density, np.greater)
         minima = argrelextrema(density, np.less)
         d, b, m = is_bimodal(intensity, density) 
