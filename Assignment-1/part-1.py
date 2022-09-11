@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 from skimage import exposure
 from scipy.signal import argrelextrema
+from scipy.stats import gaussian_kde
 import seaborn as sns
 
 img = np.array(cv.imread("Pictures/part1/img_5.png"))
@@ -15,7 +16,7 @@ img = np.array(cv.imread("Pictures/part1/img_5.png"))
 
 def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_max=17.1):
     hue, sat, value = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2HSV), 3, axis=2)
-    Y,Cr,Cb = np.array_split(cv.cvtColor(image,cv.COLOR_BGR2YCR_CB),3,axis =2)
+    Y, Cr, Cb = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2YCR_CB), 3, axis =2)
     hue = hue[:, :, 0]
     sat = sat[:, :, 0]
     value = value[:, :, 0]
@@ -63,16 +64,16 @@ def sidelight_correction(image):
     alpha = alpha[:, :, 0]
     beta = beta[:, :, 0]
     skin_mask = detected_skin(image)
-    plt.imshow(skin_mask,cmap ='gray')
+    # plt.imshow(skin_mask,cmap ='gray')
     faces = detect_faces(image, 1.1, 5)
     # plt.imshow(skin_mask, cmap='gray')
     for (x, y, w, h) in faces:
-        skin_in_face = skin_mask[y:y + w, x:x + h]
+        skin_in_face = skin_mask[y:y + h, x:x + w]
         #plt.imshow(skin_in_face,cmap ='gray')
-        # p = sns.distplot(lum[y:y + w, x:x + h], bins=256)
+        # p = sns.distplot(lum[y:y + h, x:x + w], bins=256)
         # intensity, density = p.lines[0].get_data()
-        # # plt.plot(intensity, density)
-        # # plt.xlim((0, 255))
+        # plt.plot(intensity, density)
+        # plt.xlim((0, 255))
         # maxima = argrelextrema(density, np.greater)
         # minima = argrelextrema(density, np.less)
         # d, b, m = is_bimodal(intensity, density)
@@ -94,30 +95,4 @@ def sidelight_correction(image):
 
 
 sidelight_correction(img)
-
-# faces = detect_faces(img, 1.001, 10)
-
-# for (x, y, w, h) in faces:
-# face = faces[0, :]
-# x = face[0]
-# y = face[1]
-# w = face[2]
-# h = face[3]
-# ax[0].imshow(img)
-# patch = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='red', facecolor='none')
-# ax[0].add_patch(patch)
-# hist = exposure.histogram(l[y:y+w, x:x+h, 0], nbins=1024)
-# ax[1].bar(hist[1], hist[0], color='blue')
-# ax[1].imshow(detect_skin(alpha, beta, hue, sat), cmap="gray")
-    # cv.rectangle(img, (x, y), (x + w, y + h), (0, 0, 0), 2)
-    # cv.imshow("Image1", img)
-    # cv.waitKey(0)
-# img1 = l[y:y+w, x:x+h]
-# ax[1].imshow(img1, cmap="gray")
-# cv.imshow("Image1", img1)
-# cv.waitKey(0)
-
-# cv.imshow("Image1", img)
-
-# cv.waitKey(0)
 plt.show()
