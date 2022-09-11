@@ -10,6 +10,7 @@ from scipy.sparse import spdiags
 from scipy.sparse.linalg import spsolve
 
 img = np.array(cv.imread("Pictures/part1/img_1.png"))
+
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
 
@@ -41,8 +42,10 @@ def detect_faces(image, scale_factor=1.01, min_neighbor=6):
     faces = face_cascade.detectMultiScale(image, scale_factor, min_neighbor)
     return faces
 
-def WLSFilter(image, lambda_ = 0.4, alpha = 1.2, eps =1e-4):
-    image = image / 256.0
+
+def WLS_filter(img, lambda_ = 0.4,alpha = 1, eps = 10^-4):
+    image = img/255.0
+
     s = image.shape
 
     k = np.prod(s)
@@ -64,11 +67,41 @@ def WLSFilter(image, lambda_ = 0.4, alpha = 1.2, eps =1e-4):
     d = 1 - (dx + np.roll(dx, s[0]) + dy + np.roll(dy, 1))
     a = a + a.T + spdiags(d, 0, k, k )
     _out = spsolve(a, image.flatten()).reshape(s[::-1])
-    out = np.rollaxis(_out,1)
-    detail = image - out
-    return out * 256, detail * 256
 
-def isBimodal(x, y):
+    out = np.rollaxis(_out,1)*255.0
+    detail_ = image - out
+    detail = np.rollaxis(detail_,1)*255.0
+    return out, detail 
+
+def eacp(F, Log_I, W=None, lambda_=0.2, alpha=0.3, eps=1e-4):
+    if W == None:
+        W= np.ones(F.shape)
+    f= F.flatten()
+    w = W.flatten()
+    s = Log_I.shape
+
+    k = np.prod(s)
+    # L_i - L_j along y axis
+    dy = np.diff(L, 1, 0)
+    dy = -lambda_ / (np.absolute(dy) ** alpha + eps)
+    dy = np.vstack((dy, np.zeros(s[1], )))
+    dy = dy.flatten()
+    # L_i - L_j along x axis
+    dx = np.diff(L, 1, 1)
+    dx = -lambda_ / (np.absolute(dx) ** alpha + eps)
+    dx = np.hstack((dx, np.zeros(s[0], )[:, np.newaxis]))
+    dx = dx.flatten()
+    # A case: j \in N_4(i)  (neighbors of diagonal line)
+    a = spdiags(np.vstack((dx, dy)), [-s[0], -1], k, k)
+    # A case: i=j   (diagonal line)
+    d = w - (dx + np.roll(dx, s[0]) + dy + np.roll(dy, 1))
+    a = a + a.T + spdiags(d, 0, k, k) # A: put together
+    f = spsolve(a, w*g).reshape(s[::-1]) # slove Af  =  b =w*g and restore 2d
+    A = np.rollaxis(f,1)
+    # A = np.clip( _out*255.0, 0, 255).astype('uint8')
+    return A
+
+def is_bimodal(x, y):
     maxima = argrelextrema(y, np.greater)[0]
     minima = argrelextrema(y, np.less)[0]
     if len(maxima) >= 2:
@@ -83,18 +116,29 @@ def isBimodal(x, y):
 
     return None, None, None
 
-def sidelight_correction(image):
+
+def face_correction(image):
+
     lum, alpha, beta = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
     lum = lum[:, :, 0]
     alpha = alpha[:, :, 0]
     beta = beta[:, :, 0]
-    out, detail = WLSFilter(lum)
+
+    I_out,detail = WLS_filter(lum)
     skin_mask = detected_skin(image)
-    faces = detect_faces(image, 1.001, 6)
+    #skin patching
+    _h,_w = image.shape[:2]
+    _kernel = cv.getStructuringElement(cv.MORPH_RECT,(int(_h/48),int(_w/48)))
+    skin_mask_closed = cv.morphologyEx(skin_mask,cv.MORPH_CLOSE,_kernel)
+    plt.imshow(skin_mask_closed,cmap ='gray')
+    #face_detection
+    face = detect_faces(image, 1.001, 5)
+    #all faces
+    faces = [lum[y:y + h, x:x + w] for (x, y, w, h) in face]
+    #face_correction a)sidelight and b)exposure
     for index,(x, y, w, h) in enumerate(faces):
-        print(0)
-        skin_in_face = skin_mask[y:y + h, x:x + w]
-        # plt.imshow(lum[y:y + h, x:x + w], cmap="gray")
+        #sidelight correction
+        skin_in_face = skin_mask_closed[y:y+h, x:x+w]
         data, bins = exposure.histogram(lum[y:y + h, x:x + w], nbins=256)
         # plt.hist(data, bins)
         intensity = np.mgrid[0:256]
@@ -103,11 +147,9 @@ def sidelight_correction(image):
         # plt.plot(intensity, density)
         maxima = argrelextrema(density, np.greater)
         minima = argrelextrema(density, np.less)
-        # plt.scatter(intensity[maxima], density[maxima], color='green')
-        # plt.scatter(intensity[minima], density[minima], color='red')
-        d, b, m = isBimodal(intensity, density)
-        # print(d, b, m)
-        A = np.ones_like(lum, dtype="float")
+        d, b, m = is_bimodal(intensity, density) 
+        print(index,d,b,m)
+        A = np.ones(lum.shape)
         if d and b and m:
             f = (b - d) / (m - d)
             r = 0
@@ -118,19 +160,22 @@ def sidelight_correction(image):
                         A[y + r, x + s] = f
                     s += 1
                 r += 1
-        out = np.multiply(out, A)
+
+
+        A_after = eacp(A,lum,W)
+        I_out = np.multiply(I_out,A_after)
+
+        #exposure_correction
 
     final = out + detail
-    final = final.astype("uint8")
-    # difference = final - lum
     final = np.stack((final, alpha, beta), axis=2)
     final_bgr = cv.cvtColor(final, cv.COLOR_Lab2BGR)
     cv.imshow("Final", final_bgr)
     cv.waitKey(0)
-    # pos = plt.imshow(difference, cmap='gray')
-    # plt.colorbar(pos)
+    plt.imshow(final, cmap='gray')
 
-sidelight_correction(img)
+
+face_correction(img)
 plt.show()
 
 # faces = detect_faces(img, 1.001, 10)
