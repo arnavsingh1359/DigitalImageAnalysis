@@ -19,7 +19,7 @@ def wlsfilter(image_orig, lambda_=0.4, alpha=1.2, small_eps=1e-4):
     detail: detail, 0-1, float
     """
     # print 'wls: lambda, alpha', lambda_, alpha
-    image = image_orig
+    image = image_orig/256.0
     s = image.shape
 
     k = numpy.prod(s)
@@ -48,12 +48,12 @@ def test_wlsfilter():
     """deprecated, need to remove rollaxis"""
     lambda_ = 0.1
     alpha = 1.2
-    image = cv2.imread("Pictures/part1/img_6.png")
+    image = cv2.imread("Pictures/part1/img_1.png")
     # normalize image
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     out, detail = wlsfilter(image, lambda_, alpha)
     print(image.shape,out.shape,detail.shape)
-    plt.imshow(detail,'gray')
+    plt.imshow(out,'gray')
     plt.show()
 
 def test_luminance():
