@@ -5,15 +5,14 @@ from matplotlib import patches
 from skimage import exposure
 from scipy.signal import argrelextrema
 import seaborn as sns
+from scipy import stats
 from scipy.sparse import spdiags
 from scipy.sparse.linalg import spsolve
 
 img = np.array(cv.imread("Pictures/part1/img_1.png"))
-print(type(img[0][0]))
+
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
-
-
 
 
 def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_max=17.1):
@@ -32,19 +31,21 @@ def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_ma
         while q < result.shape[1]:            
             if sat_min <= sat[p, q] <= sat_max and hue[p, q] <= hue_max :
                 if 135<=Cr[p,q]<=180 and 85<=Cb[p,q]<=135:
-                    result[p, q] = 255
+                    result[p, q] = 1
             q += 1
         p += 1
 
-    return result
+    return result.astype("uint8")
 
 def detect_faces(image, scale_factor=1.01, min_neighbor=6):
-    face_cascade = cv.CascadeClassifier('haarcascade_frontalface_default.xml')
+    face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
     faces = face_cascade.detectMultiScale(image, scale_factor, min_neighbor)
     return faces
 
+
 def WLS_filter(img, lambda_ = 0.4,alpha = 1, eps = 10^-4):
     image = img/255.0
+
     s = image.shape
 
     k = np.prod(s)
@@ -61,11 +62,12 @@ def WLS_filter(img, lambda_ = 0.4,alpha = 1, eps = 10^-4):
     dx = np.hstack((dx, last_x[:, np.newaxis]))
     dx = dx.flatten()
 
-    a = spdiags(np.vstack((dx, dy)), [-s[0], -1], k, k)
+    a = spdiags(np.vstack((dx, dy)), [-s[0], -1], k, k, format="csr")
 
     d = 1 - (dx + np.roll(dx, s[0]) + dy + np.roll(dy, 1))
     a = a + a.T + spdiags(d, 0, k, k )
     _out = spsolve(a, image.flatten()).reshape(s[::-1])
+
     out = np.rollaxis(_out,1)*255.0
     detail_ = image - out
     detail = np.rollaxis(detail_,1)*255.0
@@ -116,10 +118,12 @@ def is_bimodal(x, y):
 
 
 def face_correction(image):
+
     lum, alpha, beta = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
     lum = lum[:, :, 0]
     alpha = alpha[:, :, 0]
     beta = beta[:, :, 0]
+
     I_out,detail = WLS_filter(lum)
     skin_mask = detected_skin(image)
     #skin patching
@@ -149,20 +153,27 @@ def face_correction(image):
         if d and b and m:
             f = (b - d) / (m - d)
             r = 0
-            while r < skin_in_face.shape[0]:
+            while r < w:
                 s = 0
-                while s < skin_in_face.shape[1]:
+                while s < h:
                     if skin_in_face[r, s] and lum[y + r, x + s] < m:
                         A[y + r, x + s] = f
                     s += 1
                 r += 1
+
+
         A_after = eacp(A,lum,W)
         I_out = np.multiply(I_out,A_after)
 
         #exposure_correction
 
-    final =
+    final = out + detail
+    final = np.stack((final, alpha, beta), axis=2)
+    final_bgr = cv.cvtColor(final, cv.COLOR_Lab2BGR)
+    cv.imshow("Final", final_bgr)
+    cv.waitKey(0)
     plt.imshow(final, cmap='gray')
+
 
 face_correction(img)
 plt.show()
