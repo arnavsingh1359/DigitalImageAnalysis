@@ -9,7 +9,7 @@ from scipy import stats
 from scipy.sparse import spdiags
 from scipy.sparse.linalg import spsolve
 
-img = np.array(cv.imread("Pictures/part1/img_6.png"))
+img = np.array(cv.imread("Pictures/part1/img_1.png"))
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
 
@@ -37,7 +37,7 @@ def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_ma
     return result.astype("uint8")
 
 def detect_faces(image, scale_factor=1.01, min_neighbor=6):
-    face_cascade = cv.CascadeClassifier('haarcascade_frontalface_default.xml')
+    face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
     faces = face_cascade.detectMultiScale(image, scale_factor, min_neighbor)
     return faces
 
@@ -68,7 +68,6 @@ def WLSFilter(image, lambda_ = 0.4, alpha = 1.2, eps =1e-4):
     detail = image - out
     return out * 256, detail * 256
 
-
 def isBimodal(x, y):
     maxima = argrelextrema(y, np.greater)[0]
     minima = argrelextrema(y, np.less)[0]
@@ -84,7 +83,6 @@ def isBimodal(x, y):
 
     return None, None, None
 
-
 def sidelight_correction(image):
     lum, alpha, beta = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
     lum = lum[:, :, 0]
@@ -92,17 +90,23 @@ def sidelight_correction(image):
     beta = beta[:, :, 0]
     out, detail = WLSFilter(lum)
     skin_mask = detected_skin(image)
-    faces = detect_faces(image, 1.001, 5)
+    faces = detect_faces(image, 1.001, 6)
     for index,(x, y, w, h) in enumerate(faces):
+        print(0)
         skin_in_face = skin_mask[y:y + h, x:x + w]
+        # plt.imshow(lum[y:y + h, x:x + w], cmap="gray")
         data, bins = exposure.histogram(lum[y:y + h, x:x + w], nbins=256)
+        # plt.hist(data, bins)
         intensity = np.mgrid[0:256]
         kernel = stats.gaussian_kde(data)
         density = kernel(intensity)
         # plt.plot(intensity, density)
         maxima = argrelextrema(density, np.greater)
         minima = argrelextrema(density, np.less)
+        # plt.scatter(intensity[maxima], density[maxima], color='green')
+        # plt.scatter(intensity[minima], density[minima], color='red')
         d, b, m = isBimodal(intensity, density)
+        # print(d, b, m)
         A = np.ones_like(lum, dtype="float")
         if d and b and m:
             f = (b - d) / (m - d)
@@ -110,17 +114,21 @@ def sidelight_correction(image):
             while r < w:
                 s = 0
                 while s < h:
-                    if skin_mask[y + r, x + s] and lum[y + r, x + s] < m:
+                    if skin_in_face[r, s] and lum[y + r, x + s] < m:
                         A[y + r, x + s] = f
                     s += 1
                 r += 1
         out = np.multiply(out, A)
-        # plt.scatter(intensity[maxima], density[maxima], color='green')
-        # plt.scatter(intensity[minima], density[minima], color='red')
+
     final = out + detail
-    difference = final - lum
-    pos = plt.imshow(final, cmap='gray')
-    plt.colorbar(pos)
+    final = final.astype("uint8")
+    # difference = final - lum
+    final = np.stack((final, alpha, beta), axis=2)
+    final_bgr = cv.cvtColor(final, cv.COLOR_Lab2BGR)
+    cv.imshow("Final", final_bgr)
+    cv.waitKey(0)
+    # pos = plt.imshow(difference, cmap='gray')
+    # plt.colorbar(pos)
 
 sidelight_correction(img)
 plt.show()
