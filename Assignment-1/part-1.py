@@ -10,64 +10,16 @@ from scipy.sparse import spdiags
 from scipy.sparse.linalg import spsolve
 from scipy.signal import correlate2d
 from math import sqrt, pi
+from scipy.signal import medfilt
+from scipy import ndimage
 
-img = np.array(cv.imread("Pictures/part1/img_5.png"))
+img = np.array(cv.imread("Pictures/part1/img_1.png"))
 
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
 
 # Implemented, Adaptive Luminance Enhancement from AINDANE
 
-def ale(I_bgr):
-    I = cv.cvtColor(I_bgr, cv.COLOR_BGR2GRAY)
-    In = I/255.0
-    hist = cv.calcHist([I],[0],None,[256],[0,256])
-    cdf = hist.cumsum()
-    L = np.searchsorted(cdf, 0.1*I.shape[0]*I.shape[1], side='right')
-    L_as_array = np.array([L]) # L as array, for np.piecewise
-    z = np.piecewise( L_as_array,
-                        [ L_as_array<=50,
-                        L_as_array>50 and L_as_array<=150,
-                        L_as_array>150
-                        ],
-                        [ 0, (L-50)/100.0, 1 ]
-    )
-
-    In_prime = (In**(0.75*z+0.25) + (1-In)*0.4*(1-z) + In**(2-z)) /2.0
-    return I, In_prime
-
-def ace(I, In_prime, c=5):
-    sigma = sqrt(c**2 /2)
-    img_freq = np.fft.fft2(I)
-    img_freq_shift = np.fft.fftshift(img_freq)
-    # size of gaussian: 3*sigma(0.99...), cv2 require sigma to be int
-    _gaussian_x = cv.getGaussianKernel(int(round(sigma*3)), int(round(sigma)))
-    gaussian = (_gaussian_x * _gaussian_x.T) \
-                / np.sum(_gaussian_x * _gaussian_x.T) # normalize
-    ##gaussian kernel padded with 0, extend to image.shape
-    gaussian_freq_shift = np.fft.fftshift( np.fft.fft2(gaussian, I.shape) )
-
-    image_fm = img_freq_shift * gaussian_freq_shift # element wise multiplication
-    I_conv = np.real( np.fft.ifft2( np.fft.ifftshift(image_fm) ) ) # equation 6
-
-    sigma_I = np.array( [np.std(I)] ) # std of I,to an array, for np.piecewise
-    P = np.piecewise(sigma_I,  [ sigma_I<=3,sigma_I>3 and sigma_I<10,  sigma_I>=10], [ 3, 1.0*(27-2*sigma_I)/7, 1 ] )
-    E = ((I_conv+1e-6) / (I+1e-6)) ** P
-    S = 255 * np.power(In_prime, E)
-    return S
-
-def color_restoration(I_bgr, I, S, lambdaa):
-    S_restore = np.zeros(I_bgr.shape)
-    for j in range(3): # b,g,r
-        S_restore[...,j] = S * ( 1.0* I_bgr[...,j] / (I + 1e-6) ) * lambdaa[j]
-    return S_restore
-
-def aindane(I_bgr):
-    I, In_prime = ale(I_bgr)
-    S = ace(I, In_prime, c=240)
-    S_restore = color_restoration(I_bgr, I, S, [1,1,1]) 
-    S_bgr = np.clip(S_restore, 0, 255).astype('uint8')
-    return S_bgr
 
 def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_max=17.1):
     lum,a,b = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
@@ -223,20 +175,17 @@ def allzero(img):
     return True
 
 
-def face_correction(image,lambda_=0.2):
+def face_correction(image,skin_mask , lambda_=0.2):
 
     lum, alpha, beta = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
     lum = lum[:, :, 0]
     alpha = alpha[:, :, 0]
     beta = beta[:, :, 0]
-    I_aindane = aindane(image)
     I_out,detail = WLS_filter(lum)
-
-    skin_mask = detected_skin(image)
     cv.imshow('mask',skin_mask)
     cv.waitKey(0)
     #face_detection
-    face = detect_faces(I_aindane, 1.001, 5)
+    face = detect_faces(image, 1.001, 5)
     #all faces
     faces = [lum[y:y + h, x:x + w] for (x, y, w, h) in face]
     W = np.zeros(lum.shape)
@@ -300,31 +249,71 @@ def face_correction(image,lambda_=0.2):
     cv.waitKey(0)           
 
 
-face_correction(img,1)
+def skyline(mask):
+    h, w = mask.shape
+    for i in range(w):
+        raw = mask[:, i]
+        after_median = medfilt(raw, 19)
+        try:
+            first_zero_index = np.where(after_median == 0)[0][0]
+            first_one_index = np.where(after_median == 1)[0][0]
+            if first_zero_index > 20:
+                mask[first_one_index:first_zero_index, i] = 1
+                mask[first_zero_index:, i] = 0
+                mask[:first_one_index, i] = 0
+        except:
+            continue
+    return mask
+
+def check_blue(mask,a,b,c):
+    b,g,r= np.array_split(mask, 3, axis=2)
+    b = b[:, :, 0]
+    g = g[:, :, 0]
+    r = r[:, :, 0]
+    IDEAL_SKY_BGR = (195, 165, 80)
+    RANGE = (a,b,c)
+    h,w = b.shape
+    for i in range(h):
+        for j in range(w):
+            if not (abs(b[i][j]-IDEAL_SKY_BGR[0]) <RANGE[0] and abs(g[i][j]-IDEAL_SKY_BGR[1]) <RANGE[1] and abs(r[i][j]-IDEAL_SKY_BGR[2] )<RANGE[2]):
+                b[i][j] =0
+                g[i][j] =0
+                r[i][j]=0
+    return np.stack((b, g, r), axis=2)
+
+def sky_mask(img,a=60,b=65,c=80):
+    h, w, _ = img.shape
+
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+    img_gray = cv.blur(img_gray, (9, 3))
+    cv.medianBlur(img_gray, 5)
+    lap = cv.Laplacian(img_gray, cv.CV_8U)
+    gradient_mask = (lap < 5.9).astype(np.uint8)
+
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, (9, 3))
+
+    mask = cv.morphologyEx(gradient_mask, cv.MORPH_ERODE, kernel)
+    # plt.imshow(mask)
+    # plt.show()
+    mask = skyline(mask)
+    after_img = cv.bitwise_and(img, img, mask=mask)
+    after_img = check_blue(after_img,a,b,c)
+    return after_img
+
+
+#def sky_correction
+
+#def salient_correction
+
+def final_image(img):
+    skin_mask = detected_skin(img)
+    sky_mask = sky_mask(img)
+    img_1 = face_correction(img,skin_mask,0.5)
+    #img_2 = sky_correction()
+    #img_3 = salient_correction()
+
+
+
 plt.show()
 
-# faces = detect_faces(img, 1.001, 10)
-
-# for (x, y, w, h) in faces:
-# face = faces[0, :]
-# x = face[0]
-# y = face[1]
-# w = face[2]
-# h = face[3]
-# ax[0].imshow(img)
-# patch = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='red', facecolor='none')
-# ax[0].add_patch(patch)
-# hist = exposure.histogram(l[y:y+w, x:x+h, 0], nbins=1024)
-# ax[1].bar(hist[1], hist[0], color='blue')
-# ax[1].imshow(detect_skin(alpha, beta, hue, sat), cmap="gray")
-    # cv.rectangle(img, (x, y), (x + w, y + h), (0, 0, 0), 2)
-    # cv.imshow("Image1", img)
-    # cv.waitKey(0)
-# img1 = l[y:y+w, x:x+h]
-# ax[1].imshow(img1, cmap="gray")
-# cv.imshow("Image1", img1)
-# cv.waitKey(0)
-
-# cv.imshow("Image1", img)
-
-# cv.waitKey(0)
