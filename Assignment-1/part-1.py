@@ -13,7 +13,7 @@ from math import sqrt, pi
 from scipy.signal import medfilt
 from scipy import ndimage
 
-img = np.array(cv.imread("Pictures/part1/img_1.png"))
+img = np.array(cv.imread("Pictures/part1/img_6.png"))
 
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
@@ -40,8 +40,17 @@ def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_ma
     while p < result.shape[0]:
         q = 0
         while q < result.shape[1]:            
+            if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1.5 :
+                if 16.25 <= sat[p, q] <= 191.25  and hue[p,q]<hue_max:
+                    result[p, q] = 1
+            q += 1
+        p += 1
+
+    while p < result.shape[0]:
+        q = 0
+        while q < result.shape[1]:            
             if sat_min <= sat[p, q] <= sat_max and hue[p, q] <= hue_max :
-                if 135<=Cr[p,q]<=180 and 85<=Cb[p,q]<=135:
+                if 135<=Cr[p,q]<=160 and 85<=Cb[p,q]<=135:
                     result[p, q] = 1
             q += 1
         p += 1
@@ -50,7 +59,7 @@ def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_ma
     while p < result.shape[0]:
         q = 0
         while q < result.shape[1]:            
-            if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1.25 :
+            if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1.5 :
                 if 16.25 <= sat[p, q] <= 191.25  & hue[p,q]<hue_max:
                     result[p, q] = 1
             q += 1
@@ -182,8 +191,6 @@ def face_correction(image,skin_mask , lambda_=0.2):
     alpha = alpha[:, :, 0]
     beta = beta[:, :, 0]
     I_out,detail = WLS_filter(lum)
-    cv.imshow('mask',skin_mask)
-    cv.waitKey(0)
     #face_detection
     face = detect_faces(image, 1.001, 5)
     #all faces
@@ -245,8 +252,7 @@ def face_correction(image,skin_mask , lambda_=0.2):
     final = np.stack((final, alpha, beta), axis=2)
     final = final.astype("uint8")
     final_bgr = cv.cvtColor(final, cv.COLOR_Lab2BGR)            
-    cv.imshow('',final_bgr)
-    cv.waitKey(0)           
+    return final_bgr           
 
 
 def skyline(mask):
@@ -265,13 +271,13 @@ def skyline(mask):
             continue
     return mask
 
-def check_blue(mask,a,b,c):
+def check_blue(mask):
     b,g,r= np.array_split(mask, 3, axis=2)
     b = b[:, :, 0]
     g = g[:, :, 0]
     r = r[:, :, 0]
     IDEAL_SKY_BGR = (195, 165, 80)
-    RANGE = (a,b,c)
+    RANGE = (60,65,120)
     h,w = b.shape
     for i in range(h):
         for j in range(w):
@@ -281,7 +287,7 @@ def check_blue(mask,a,b,c):
                 r[i][j]=0
     return np.stack((b, g, r), axis=2)
 
-def sky_mask(img,a=60,b=65,c=80):
+def sky_mask(img):
     h, w, _ = img.shape
 
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
@@ -298,7 +304,7 @@ def sky_mask(img,a=60,b=65,c=80):
     # plt.show()
     mask = skyline(mask)
     after_img = cv.bitwise_and(img, img, mask=mask)
-    after_img = check_blue(after_img,a,b,c)
+    after_img = check_blue(after_img)
     return after_img
 
 
@@ -308,12 +314,15 @@ def sky_mask(img,a=60,b=65,c=80):
 
 def final_image(img):
     skin_mask = detected_skin(img)
-    sky_mask = sky_mask(img)
+    skymask = sky_mask(img)
     img_1 = face_correction(img,skin_mask,0.5)
     #img_2 = sky_correction()
-    #img_3 = salient_correction()
+    #img_3 = salient_correction()sk,0.5)
+    cv.imshow('',img_1)
+    cv.waitKey(0)
+    cv.imshow('',skymask)
+    cv.waitKey(0)
 
-
-
+final_image(img)
 plt.show()
 
