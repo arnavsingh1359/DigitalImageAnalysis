@@ -108,7 +108,7 @@ def match_color_swatch(color_image, gray_image, n_swatches, n_samples=50, window
 
     for ind, col_swatch in enumerate(lum_csw):
         index = 0
-        while index < 30:
+        while index < 100:
             x = random.randint(0, col_swatch.shape[0] - nbd_size)
             y = random.randint(0, col_swatch.shape[1] - nbd_size)
             sample = col_swatch[y:y + nbd_size, x:x + nbd_size]
@@ -156,21 +156,21 @@ def match_color_swatch(color_image, gray_image, n_swatches, n_samples=50, window
 
 
 imgcolor = np.array(cv.imread("F:\\IITD\\2022-1\\COL783-Digital Image "
-                              "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_6a.png"))
+                              "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_2a.png"))
 # cv.imshow("Color", imgcolor)
 # cv.waitKey(0)
 imggray = np.array(cv.imread("F:\\IITD\\2022-1\\COL783-Digital Image "
-                             "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_6b.png", 0))
+                             "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_2b.png", 0))
 # cv.imshow("Gray", imggray)
 # cv.waitKey(0)
-# match_color_swatch(imgcolor, imggray, 2, 50, nbd_size=2)
-iterations = 10
-for ite in range(0, iterations):
-    print(f"iteration = {ite}")
-    start = time.time()
-    colorized_lab = match_color(imgcolor, imggray)
-    end = time.time()
-    colorized_bgr = cv.cvtColor(colorized_lab, cv.COLOR_Lab2BGR)
-    filename = f"F:\\IITD\\2022-1\\COL783-Digital Image Analysis\\Assignments\\Assignment-1\\pictures\\result\\img_4{ite}.png "
-    cv.imwrite(filename, colorized_bgr)
-    print(end - start)
+match_color_swatch(imgcolor, imggray, 2, nbd_size=2)
+# iterations = 10
+# for ite in range(0, iterations):
+#     print(f"iteration = {ite}")
+#     start = time.time()
+#     colorized_lab = match_color(imgcolor, imggray)
+#     end = time.time()
+#     colorized_bgr = cv.cvtColor(colorized_lab, cv.COLOR_Lab2BGR)
+#     filename = f"F:\\IITD\\2022-1\\COL783-Digital Image Analysis\\Assignments\\Assignment-1\\pictures\\result\\img_4{ite}.png "
+#     cv.imwrite(filename, colorized_bgr)
+#     print(end - start)
