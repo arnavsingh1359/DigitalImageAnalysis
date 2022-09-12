@@ -13,14 +13,23 @@ from math import sqrt, pi
 from scipy.signal import medfilt
 from scipy import ndimage
 
-img = np.array(cv.imread("Pictures/part1/img_6.png"))
+img = np.array(cv.imread("Pictures/part1/img_1.png"))
 
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
 
 # Implemented, Adaptive Luminance Enhancement from AINDANE
 
-
+def invert(img):
+    h,w = img.shape
+    img2 = img.copy()
+    for i in range(h):
+        for j in range(w):
+            if img[i][j] == 255:
+                img2[i][j] =0
+            else:
+                img2[i][j] = 255
+    return img2
 def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_max=17.1):
     lum,a,b = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
     hue, sat, value = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2HSV), 3, axis=2)
@@ -33,16 +42,20 @@ def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_ma
     Cb = Cb[:,:,0]
     lum = lum[:, :, 0]
     a = a[:, :, 0]
-    b = b[:, :, 0]
-    result = np.zeros(lum.shape,image.dtype)			
+    b = b[:, :, 0]	
     p = 0
+
+    ret2,th2 = cv.threshold(lum,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+    result = invert(th2)
     #INITIAL TEST
     while p < result.shape[0]:
         q = 0
         while q < result.shape[1]:            
-            if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1.5 :
+            if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1 :
                 if 16.25 <= sat[p, q] <= 191.25  and hue[p,q]<hue_max:
-                    result[p, q] = 1
+                    result[p, q] = 255
+                else:
+                    result[p,q] =0
             q += 1
         p += 1
 
@@ -51,26 +64,28 @@ def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_ma
         while q < result.shape[1]:            
             if sat_min <= sat[p, q] <= sat_max and hue[p, q] <= hue_max :
                 if 135<=Cr[p,q]<=160 and 85<=Cb[p,q]<=135:
-                    result[p, q] = 1
+                    result[p, q] = 255
+                else:
+                    result[p,q] = 0
             q += 1
         p += 1
     
-    # SECOND TESTING
-    while p < result.shape[0]:
-        q = 0
-        while q < result.shape[1]:            
-            if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1.5 :
-                if 16.25 <= sat[p, q] <= 191.25  & hue[p,q]<hue_max:
-                    result[p, q] = 1
-            q += 1
-        p += 1
+    # # SECOND TESTING
+    # while p < result.shape[0]:
+    #     q = 0
+    #     while q < result.shape[1]:            
+    #         if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1.5 :
+    #             if 16.25 <= sat[p, q] <= 191.25  & hue[p,q]<hue_max:
+    #                 result[p, q] = 1
+    #         q += 1
+    #     p += 1
 
     #skin patching
     _h,_w = image.shape[:2]
     _kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(int(_h/48),int(_w/48)))
     skin_mask_closed = cv.morphologyEx(result,cv.MORPH_CLOSE,_kernel)
     
-    return skin_mask_closed*255
+    return skin_mask_closed
 
 def detect_faces(image, scale_factor=1.01, min_neighbor=6):
     face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -296,12 +311,8 @@ def sky_mask(img):
     cv.medianBlur(img_gray, 5)
     lap = cv.Laplacian(img_gray, cv.CV_8U)
     gradient_mask = (lap < 5.9).astype(np.uint8)
-
     kernel = cv.getStructuringElement(cv.MORPH_RECT, (9, 3))
-
     mask = cv.morphologyEx(gradient_mask, cv.MORPH_ERODE, kernel)
-    # plt.imshow(mask)
-    # plt.show()
     mask = skyline(mask)
     after_img = cv.bitwise_and(img, img, mask=mask)
     after_img = check_blue(after_img)
@@ -315,7 +326,7 @@ def sky_mask(img):
 def final_image(img):
     skin_mask = detected_skin(img)
     skymask = sky_mask(img)
-    img_1 = face_correction(img,skin_mask,0.5)
+    img_1 = face_correction(img,skin_mask,1.2)
     #img_2 = sky_correction()
     #img_3 = salient_correction()sk,0.5)
     cv.imshow('',img_1)
