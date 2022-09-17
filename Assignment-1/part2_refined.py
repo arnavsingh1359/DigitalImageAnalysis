@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+from scipy.signal import medfilt
 from skimage import exposure
 import random
 from localbinarypatterns import LocalBinaryPatterns
@@ -143,24 +144,81 @@ def match_color_swatch(color_image, gray_image, n_swatches, n_samples=50, window
             # print(pred[0])
             x = random.randint(0, alpha_csw[pred[0]].shape[0] - nbd_size)
             y = random.randint(0, alpha_csw[pred[0]].shape[1] - nbd_size)
-            colorized_lab[i:i + nbd_size, j:j + nbd_size, :][:, :, 1] = alpha_csw[pred[0]][x:x + nbd_size,
+            c_lab[i:i + nbd_size, j:j + nbd_size, :][:, :, 1] = alpha_csw[pred[0]][x:x + nbd_size,
                                                                         y:y + nbd_size]
-            colorized_lab[i:i + nbd_size, j:j + nbd_size, :][:, :, 2] = beta_csw[pred[0]][x:x + nbd_size,
+            c_lab[i:i + nbd_size, j:j + nbd_size, :][:, :, 2] = beta_csw[pred[0]][x:x + nbd_size,
                                                                         y:y + nbd_size]
             j += 1
         i += 1
-    colorized_bgr = cv.cvtColor(colorized_lab, cv.COLOR_Lab2BGR)
-    print(all_predictions)
-    cv.imshow("Colorized", colorized_bgr)
-    cv.waitKey(0)
+    colorized_bgr = cv.cvtColor(c_lab, cv.COLOR_Lab2BGR)
+    # print(all_predictions)
+    cv.imwrite("Colorized.png", colorized_bgr)
+    # cv.waitKey(0)
+
+
+def skyline(mask):
+    h, w = mask.shape
+    for i in range(w):
+        raw = mask[:, i]
+        after_median = medfilt(raw, 19)
+        try:
+            first_zero_index = np.where(after_median == 0)[0][0]
+            first_one_index = np.where(after_median == 1)[0][0]
+            if first_zero_index > 20:
+                mask[first_one_index:first_zero_index, i] = 1
+                mask[first_zero_index:, i] = 0
+                mask[:first_one_index, i] = 0
+        except:
+            continue
+    return mask
+
+
+def check_blue(mask):
+    b, g, r = np.array_split(mask, 3, axis=2)
+    b = b[:, :, 0]
+    g = g[:, :, 0]
+    r = r[:, :, 0]
+    IDEAL_SKY_BGR = (195, 165, 80)
+    RANGE = (60, 65, 120)
+    h, w = b.shape
+    for i in range(h):
+        for j in range(w):
+            if not (abs(b[i][j] - IDEAL_SKY_BGR[0]) < RANGE[0] and abs(g[i][j] - IDEAL_SKY_BGR[1]) < RANGE[1] and abs(
+                    r[i][j] - IDEAL_SKY_BGR[2]) < RANGE[2]):
+                b[i][j] = 0
+                g[i][j] = 0
+                r[i][j] = 0
+    return np.stack((b, g, r), axis=2)
+
+
+def sky_mask(img):
+    h, w, _ = img.shape
+
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+    img_gray = cv.blur(img_gray, (9, 3))
+    cv.medianBlur(img_gray, 5)
+    lap = cv.Laplacian(img_gray, cv.CV_8U)
+    gradient_mask = (lap < 5.9).astype(np.uint8)
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, (9, 3))
+    mask = cv.morphologyEx(gradient_mask, cv.MORPH_ERODE, kernel)
+    mask = skyline(mask)
+    after_img = cv.bitwise_and(img, img, mask=mask)
+    after_img = check_blue(after_img)
+    return after_img
 
 
 imgcolor = np.array(cv.imread("F:\\IITD\\2022-1\\COL783-Digital Image "
-                              "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_2a.png"))
+                              "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_1a.png"))
 # cv.imshow("Color", imgcolor)
 # cv.waitKey(0)
 imggray = np.array(cv.imread("F:\\IITD\\2022-1\\COL783-Digital Image "
-                             "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_2b.png", 0))
+                             "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_1b.png", 0))
+# img = cv.imread("Pictures\\part2\\img.png")
+# masked = sky_mask(img)
+
+# imggray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
 # cv.imshow("Gray", imggray)
 # cv.waitKey(0)
 match_color_swatch(imgcolor, imggray, 2, nbd_size=2)

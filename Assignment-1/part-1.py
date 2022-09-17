@@ -13,7 +13,7 @@ from math import sqrt, pi
 from scipy.signal import medfilt
 from scipy import ndimage
 
-img = np.array(cv.imread("Pictures/part1/img_6.png"))
+img = np.array(cv.imread("Pictures/part1/img_1.png"))
 
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
@@ -124,12 +124,10 @@ def WLS_filter(img, lambda_ = 0.1,alpha = 1.2, eps = 10^-4):
     np.clip(detail, 0, 255, out=detail)
     return out, detail
 
-
 def eacp(F, I, W= None, lambda_=0.2, alpha=0.3, eps=1e-4):
     if W is None:
         W= np.ones(F.shape)
     L=np.log(I+eps)
-
     f= F.flatten('F')
     w = W.flatten('F')
     s = L.shape
@@ -208,15 +206,6 @@ def face_correction(image,skin_mask , lambda_=0.2):
     alpha = alpha[:, :, 0]
     beta = beta[:, :, 0]
     I_out,detail = WLS_filter(lum)
-
-
-    skin_mask = detected_skin(image)
-    #skin patching
-    _h,_w = image.shape[:2]
-    _kernel = cv.getStructuringElement(cv.MORPH_RECT,(int(_h/48),int(_w/48)))
-    skin_mask_closed = cv.morphologyEx(skin_mask,cv.MORPH_CLOSE,_kernel)
-    
-
     #face_detection
     face = detect_faces(image, 1.001, 5)
     #all faces
@@ -224,9 +213,7 @@ def face_correction(image,skin_mask , lambda_=0.2):
     W = np.zeros(lum.shape)
     A = np.ones(lum.shape, dtype="float")
     B = np.ones(lum.shape)
-
     # ##face_correction a)sidelight and b)exposure
-
     for index,(x, y, w, h) in enumerate(face):
         #sidelight correction
         skin_in_face = skin_mask[y:y+h, x:x+w]
@@ -238,9 +225,7 @@ def face_correction(image,skin_mask , lambda_=0.2):
         # plt.plot(intensity, density)
         maxima = argrelextrema(density, np.greater)
         minima = argrelextrema(density, np.less)
-
         d, b, m = is_bimodal(intensity, density)     
-
         #global W
         if d and b and m:
             f = (b - d) / (m - d)
@@ -347,7 +332,6 @@ def final_image(img):
     cv.imshow('',img_1)
     cv.waitKey(0)
     cv.imshow('',skymask)
-
     cv.waitKey(0)
 
 final_image(img)
