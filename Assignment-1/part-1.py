@@ -8,14 +8,30 @@ import seaborn as sns
 from scipy import stats
 from scipy.sparse import spdiags
 from scipy.sparse.linalg import spsolve
+from scipy.signal import correlate2d
+from math import sqrt, pi
+from scipy.signal import medfilt
+from scipy import ndimage
 
 img = np.array(cv.imread("Pictures/part1/img_6.png"))
 
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)
 
+# Implemented, Adaptive Luminance Enhancement from AINDANE
 
+def invert(img):
+    h,w = img.shape
+    img2 = img.copy()
+    for i in range(h):
+        for j in range(w):
+            if img[i][j] == 255:
+                img2[i][j] =0
+            else:
+                img2[i][j] = 255
+    return img2
 def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_max=17.1):
+    lum,a,b = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
     hue, sat, value = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2HSV), 3, axis=2)
     Y,Cr,Cb = np.array_split(cv.cvtColor(image,cv.COLOR_BGR2YCR_CB),3,axis =2)
     hue = hue[:, :, 0]
@@ -24,18 +40,52 @@ def detected_skin(image, alpha_a=6.5, beta_b=12, sat_min=15, sat_max=170, hue_ma
     Y = Y[:, :, 0]
     Cr = Cr[:, :, 0]
     Cb = Cb[:,:,0]
-    result = np.zeros(hue.shape)			
+    lum = lum[:, :, 0]
+    a = a[:, :, 0]
+    b = b[:, :, 0]	
     p = 0
+
+    ret2,th2 = cv.threshold(lum,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+    result = invert(th2)
+    #INITIAL TEST
+    while p < result.shape[0]:
+        q = 0
+        while q < result.shape[1]:            
+            if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1 :
+                if 16.25 <= sat[p, q] <= 191.25  and hue[p,q]<hue_max:
+                    result[p, q] = 255
+                else:
+                    result[p,q] =0
+            q += 1
+        p += 1
+
     while p < result.shape[0]:
         q = 0
         while q < result.shape[1]:            
             if sat_min <= sat[p, q] <= sat_max and hue[p, q] <= hue_max :
-                if 135<=Cr[p,q]<=180 and 85<=Cb[p,q]<=135:
-                    result[p, q] = 1
+                if 135<=Cr[p,q]<=160 and 85<=Cb[p,q]<=135:
+                    result[p, q] = 255
+                else:
+                    result[p,q] = 0
             q += 1
         p += 1
+    
+    # # SECOND TESTING
+    # while p < result.shape[0]:
+    #     q = 0
+    #     while q < result.shape[1]:            
+    #         if (1.0*(a[p,q]-143)/alpha_a)**2 + (1.0*(b[p,q]-148)/beta_b)**2 <1.5 :
+    #             if 16.25 <= sat[p, q] <= 191.25  & hue[p,q]<hue_max:
+    #                 result[p, q] = 1
+    #         q += 1
+    #     p += 1
 
-    return result.astype("uint8")
+    #skin patching
+    _h,_w = image.shape[:2]
+    _kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE,(int(_h/48),int(_w/48)))
+    skin_mask_closed = cv.morphologyEx(result,cv.MORPH_CLOSE,_kernel)
+    
+    return skin_mask_closed
 
 def detect_faces(image, scale_factor=1.01, min_neighbor=6):
     face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -74,9 +124,12 @@ def WLS_filter(img, lambda_ = 0.1,alpha = 1.2, eps = 10^-4):
     np.clip(detail, 0, 255, out=detail)
     return out, detail
 
-def eacp(F, L, W= None, lambda_=0.2, alpha=0.3, eps=1e-4):
+
+def eacp(F, I, W= None, lambda_=0.2, alpha=0.3, eps=1e-4):
     if W is None:
         W= np.ones(F.shape)
+    L=np.log(I+eps)
+
     f= F.flatten('F')
     w = W.flatten('F')
     s = L.shape
@@ -94,7 +147,7 @@ def eacp(F, L, W= None, lambda_=0.2, alpha=0.3, eps=1e-4):
     dx = dx.flatten('F')
     # A case: j \in N_4(i)  (neighbors of diagonal line)
     a = spdiags(np.vstack((dx, dy)), [-s[0], -1], k, k)
-    # A case: i=j   (diagonal line)
+    # A case: i=j   (diagonal line    # )
     d = w - (dx + np.roll(dx, s[0]) + dy + np.roll(dy, 1))
     a = a + a.T + spdiags(d, 0, k, k) # A: put together
     f = spsolve(a, w*f).reshape(s[::-1]) # slove Af  =  b =w*g and restore 2d
@@ -117,15 +170,45 @@ def is_bimodal(x, y):
 
     return None, None, None
 
+def mask_skin(img,mask):
+    for i in range(len(mask[0])):
+        for j in range(len(mask[1])):
+            if mask[i][j] == 0:
+                img[i,j] =0
+    return img
 
-def face_correction(image):
+def percentile(image):
+    data = np.zeros(256)
+    for i in range(len(image[0])):
+        for j in range(len(image[1])):
+            data[int(image[i,j])] +=1
+    
+    sum = 0
+    total = int(np.prod(image.shape)*0.75)
+    cum = np.zeros(256)
+    for i in range(len(data)):
+        sum += data[i]
+        cum[i] = sum
+        if cum[i]>=total:
+            return i
+            
+def allzero(img):
+    h,j = img.shape
+    for i in range(h):
+        for j in range(j):
+            if img[i][j] != 0 :
+                return False
+    return True
+
+
+def face_correction(image,skin_mask , lambda_=0.2):
 
     lum, alpha, beta = np.array_split(cv.cvtColor(image, cv.COLOR_BGR2Lab), 3, axis=2)
     lum = lum[:, :, 0]
     alpha = alpha[:, :, 0]
     beta = beta[:, :, 0]
-
     I_out,detail = WLS_filter(lum)
+
 
     skin_mask = detected_skin(image)
     #skin patching
@@ -133,6 +216,7 @@ def face_correction(image):
     _kernel = cv.getStructuringElement(cv.MORPH_RECT,(int(_h/48),int(_w/48)))
     skin_mask_closed = cv.morphologyEx(skin_mask,cv.MORPH_CLOSE,_kernel)
     
+
     #face_detection
     face = detect_faces(image, 1.001, 5)
     #all faces
@@ -140,10 +224,12 @@ def face_correction(image):
     W = np.zeros(lum.shape)
     A = np.ones(lum.shape, dtype="float")
     B = np.ones(lum.shape)
-    #face_correction a)sidelight and b)exposure
+
+    # ##face_correction a)sidelight and b)exposure
+
     for index,(x, y, w, h) in enumerate(face):
         #sidelight correction
-        skin_in_face = skin_mask_closed[y:y+h, x:x+w]
+        skin_in_face = skin_mask[y:y+h, x:x+w]
         data, bins = exposure.histogram(lum[y:y + h, x:x + w], nbins=256)
         # plt.hist(data, bins)
         intensity = np.mgrid[0:256]
@@ -152,7 +238,9 @@ def face_correction(image):
         # plt.plot(intensity, density)
         maxima = argrelextrema(density, np.greater)
         minima = argrelextrema(density, np.less)
-        d, b, m = is_bimodal(intensity, density)        
+
+        d, b, m = is_bimodal(intensity, density)     
+
         #global W
         if d and b and m:
             f = (b - d) / (m - d)
@@ -168,54 +256,100 @@ def face_correction(image):
             sig = 255 * 3  # manually set, 3*sig = 120 close to 255/2
             W = np.exp(-(lum - miu) ** 2 / sig ** 2)
             W[...] = 1 - W[...]
-            W[...] = 1.        
-    A_after = eacp(A,lum,W)
+            W[...] = 1  
+    are_all_zero = allzero(W.copy())
+    if are_all_zero:
+        W = np.ones(lum.shape)
+        A_after = eacp(A,lum,W, lambda_)
+    else:
+        A_after =eacp(A,lum,W,lambda_)
     I_out *=A_after
-    # #exposure_correction
-    # for index,(x, y, w, h) in enumerate(face):
-    #     skin_in_face = skin_mask_closed[y:y+h, x:x+w]      
-    #     cumsum = cv.calcHist([skin_in_face], [0], None, [255], [1, 256]).T.ravel().cumsum()
-    #     p = np.searchsorted(cumsum, cumsum[-1] * 0.75)
-    #     if p < 120:
-    #         f = (120 + p) / ((2 * p) + 1e-6)
-    #         B[y:y + h, x:x + w]= f 
-    #         B = eacp(B, lum)
-    #         I_out *= B       
-                        
-    final = I_out + detail
+    I_out2 = I_out.copy()
+    for index,(x, y, w, h) in enumerate(face):
+        
+        skin_in_face = skin_mask[y:y+h, x:x+w]    
+        temp_img = I_out[y:y+h,x:x+w]  
+        p = percentile(temp_img)
+        if p < 120:
+
+            f = (120 + p) / ((2 * p) +1e-6)
+            f = np.clip(f,1+1e-6,2-11e-6)
+            B[y:y + h, x:x + w][skin_in_face > 0] = f
+            B = eacp(B, lum)
+            I_out = I_out2*B 
+
+    final = I_out+detail
     final = np.stack((final, alpha, beta), axis=2)
     final = final.astype("uint8")
-    final_bgr = cv.cvtColor(final, cv.COLOR_Lab2BGR)
-    cv.imshow("Final", final_bgr)
+    final_bgr = cv.cvtColor(final, cv.COLOR_Lab2BGR)            
+    return final_bgr           
+
+
+def skyline(mask):
+    h, w = mask.shape
+    for i in range(w):
+        raw = mask[:, i]
+        after_median = medfilt(raw, 19)
+        try:
+            first_zero_index = np.where(after_median == 0)[0][0]
+            first_one_index = np.where(after_median == 1)[0][0]
+            if first_zero_index > 20:
+                mask[first_one_index:first_zero_index, i] = 1
+                mask[first_zero_index:, i] = 0
+                mask[:first_one_index, i] = 0
+        except:
+            continue
+    return mask
+
+def check_blue(mask):
+    b,g,r= np.array_split(mask, 3, axis=2)
+    b = b[:, :, 0]
+    g = g[:, :, 0]
+    r = r[:, :, 0]
+    IDEAL_SKY_BGR = (195, 165, 80)
+    RANGE = (60,65,120)
+    h,w = b.shape
+    for i in range(h):
+        for j in range(w):
+            if not (abs(b[i][j]-IDEAL_SKY_BGR[0]) <RANGE[0] and abs(g[i][j]-IDEAL_SKY_BGR[1]) <RANGE[1] and abs(r[i][j]-IDEAL_SKY_BGR[2] )<RANGE[2]):
+                b[i][j] =0
+                g[i][j] =0
+                r[i][j]=0
+    return np.stack((b, g, r), axis=2)
+
+def sky_mask(img):
+    h, w, _ = img.shape
+
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+    img_gray = cv.blur(img_gray, (9, 3))
+    cv.medianBlur(img_gray, 5)
+    lap = cv.Laplacian(img_gray, cv.CV_8U)
+    gradient_mask = (lap < 5.9).astype(np.uint8)
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, (9, 3))
+    mask = cv.morphologyEx(gradient_mask, cv.MORPH_ERODE, kernel)
+    mask = skyline(mask)
+    after_img = cv.bitwise_and(img, img, mask=mask)
+    after_img = check_blue(after_img)
+    return after_img
+
+
+#def sky_correction
+
+#def salient_correction
+
+def final_image(img):
+    skin_mask = detected_skin(img)
+    skymask = sky_mask(img)
+    img_1 = face_correction(img,skin_mask,1.2)
+    #img_2 = sky_correction()
+    #img_3 = salient_correction()sk,0.5)
+    cv.imshow('',img_1)
     cv.waitKey(0)
-    plt.imshow(final, cmap='gray')
+    cv.imshow('',skymask)
 
+    cv.waitKey(0)
 
-face_correction(img)
+final_image(img)
 plt.show()
 
-# faces = detect_faces(img, 1.001, 10)
-
-# for (x, y, w, h) in faces:
-# face = faces[0, :]
-# x = face[0]
-# y = face[1]
-# w = face[2]
-# h = face[3]
-# ax[0].imshow(img)
-# patch = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='red', facecolor='none')
-# ax[0].add_patch(patch)
-# hist = exposure.histogram(l[y:y+w, x:x+h, 0], nbins=1024)
-# ax[1].bar(hist[1], hist[0], color='blue')
-# ax[1].imshow(detect_skin(alpha, beta, hue, sat), cmap="gray")
-    # cv.rectangle(img, (x, y), (x + w, y + h), (0, 0, 0), 2)
-    # cv.imshow("Image1", img)
-    # cv.waitKey(0)
-# img1 = l[y:y+w, x:x+h]
-# ax[1].imshow(img1, cmap="gray")
-# cv.imshow("Image1", img1)
-# cv.waitKey(0)
-
-# cv.imshow("Image1", img)
-
-# cv.waitKey(0)
