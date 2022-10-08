@@ -22,15 +22,16 @@ def thresholder(u, e, phi):
 
 
 def plotter():
-    x1 = np.linspace(-1, 1, 25)
-    y1 = np.linspace(-1, 1, 25)
+    x1 = np.linspace(-10, 10, 100)
+    y1 = np.linspace(-10, 10, 100)
     x, y = np.meshgrid(x1, y1)
-    s = 5
+    s = 1
     k = 1.6
     ks = k * s
-    tau = 0
-    g_s = 1 / (np.sqrt(2 * np.pi * (s ** 2))) * (np.exp(-(x * x + y * y) / 2 * (s ** 2)))
-    g_ks = 1 / (np.sqrt(2 * np.pi * (ks ** 2))) * (np.exp(-(x * x + y * y) / 2 * (ks ** 2)))
+    g_s = np.exp(-(x * x + y * y) / (2 * (s ** 2)))
+    g_s /= np.sum(g_s)
+    g_ks = np.exp(-(x * x + y * y) / (2 * (ks ** 2)))
+    g_ks /= np.sum(g_ks)
     d = dog(g_s, g_ks)
     fig = plt.figure()
     ax = plt.axes(projection="3d")
@@ -38,26 +39,37 @@ def plotter():
     plt.show()
 
 
+# plotter()
+
+
 def get_gaussian_kernel(kernel_size, sigma):
-    x1 = np.linspace(-1, 1, kernel_size)
-    y1 = np.linspace(-1, 1, kernel_size)
+    x1 = np.linspace(-2 * sigma, 2 * sigma, kernel_size)
+    y1 = np.linspace(-2 * sigma, 2 * sigma, kernel_size)
     x, y = np.meshgrid(x1, y1)
-    kernel = 1 / (np.sqrt(2 * np.pi * (sigma ** 2))) * (np.exp(-(x * x + y * y) / 2 * (sigma ** 2)))
+    kernel = np.exp(-(x * x + y * y) / (2 * (sigma ** 2)))
+    su = np.sum(kernel)
+    kernel /= su
+    print(kernel)
     return kernel
 
 
 image = cv.imread("Images\\Part 3\\man2.png", 0)
-size = 7
-s = 5
+size = 5
+sigma = 5
 k = 1.6
-ks = k * s
+ks = k * sigma
 p = 18
-g_s = get_gaussian_kernel(size, s)
+g_s = get_gaussian_kernel(size, sigma)
 g_ks = get_gaussian_kernel(size, ks)
 d = dog(g_s, g_ks)
+print(d)
 blurred = cv.filter2D(image, -1, g_s)
-scaled = p * cv.filter2D(image, -1, d)
+scaled = cv.filter2D(image, -1, p * d)
+s = xdog(g_s, g_ks, p)
+i = cv.filter2D(image, -1, s)
 cv.imshow("image", image)
 cv.imshow("blurred", blurred)
 cv.imshow("scaled", scaled)
+new = np.clip(blurred + scaled, 0, 255)
+cv.imshow("new", i)
 cv.waitKey(0)
