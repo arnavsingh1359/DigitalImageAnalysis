@@ -214,7 +214,7 @@ imgcolor = np.array(cv.imread("F:\\IITD\\2022-1\\COL783-Digital Image "
 # cv.waitKey(0)
 imggray = np.array(cv.imread("F:\\IITD\\2022-1\\COL783-Digital Image "
                              "Analysis\\Assignments\\Assignment-1\\pictures\\part2\\img_1b.png", 0))
-# img = cv.imread("Pictures\\part2\\img.png")
+# img = cv.imread("Pictures\\part2\\apple.png")
 # masked = sky_mask(img)
 
 # imggray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)

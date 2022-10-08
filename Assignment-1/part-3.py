@@ -148,12 +148,7 @@ def ss_enhance(bgr_image):
     success, _em = saliency.computeSaliency(bgr_image)
     energy_map = enhance_em(bgr_image, _em)
     energy_map = (energy_map - energy_map.min()) / (energy_map.max() - energy_map.min())
-    # plt.imshow(np.hstack([energy_map, _em]))
-    # plt.colorbar()
-    # plt.show()
-
     l_new = shad_saliency_enhance(energy_map, i_lab[..., 0], bgr_image)
-    # return l_new
     i_lab[..., 0] = l_new
     i_res_bgr = cv.cvtColor(i_lab, cv.COLOR_Lab2BGR)
     return i_res_bgr, energy_map
