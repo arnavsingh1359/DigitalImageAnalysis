@@ -8,17 +8,18 @@ def dog(g_s, g_ks):
 
 
 def xdog(g_s, g_ks, p):
-    return (1 + p) * g_s - p * g_ks
+    return g_s - p*g_ks
 
 
 def thresholder(u, e, phi):
+    u_ = u/255
     result = np.ones_like(u)
     for i in range(u.shape[0]):
         for j in range(u.shape[1]):
-            if u[i, j] < e:
-                result[i, j] = 1 + np.tanh(phi * (u[i, j] - e))
+            if u_[i, j] < e:
+                result[i, j] = 1 + np.tanh(phi * (u_[i, j] - e))
 
-    return result
+    return result*255
 
 
 def plotter():
@@ -42,34 +43,23 @@ def plotter():
 # plotter()
 
 
-def get_gaussian_kernel(kernel_size, sigma):
-    x1 = np.linspace(-2 * sigma, 2 * sigma, kernel_size)
-    y1 = np.linspace(-2 * sigma, 2 * sigma, kernel_size)
-    x, y = np.meshgrid(x1, y1)
-    kernel = np.exp(-(x * x + y * y) / (2 * (sigma ** 2)))
-    su = np.sum(kernel)
-    kernel /= su
-    print(kernel)
-    return kernel
-
-
 image = cv.imread("Images\\Part 3\\man2.png", 0)
 size = 5
-sigma = 5
-k = 1.6
+sigma = 0.5
+k = 200
 ks = k * sigma
-p = 18
-g_s = get_gaussian_kernel(size, sigma)
-g_ks = get_gaussian_kernel(size, ks)
-d = dog(g_s, g_ks)
-print(d)
-blurred = cv.filter2D(image, -1, g_s)
-scaled = cv.filter2D(image, -1, p * d)
-s = xdog(g_s, g_ks, p)
-i = cv.filter2D(image, -1, s)
-cv.imshow("image", image)
-cv.imshow("blurred", blurred)
-cv.imshow("scaled", scaled)
-new = np.clip(blurred + scaled, 0, 255)
-cv.imshow("new", i)
+p = 0.98
+blurred = cv.GaussianBlur(image,(3,3),sigma)
+blurred_2 = cv.GaussianBlur(image,(3,3),ks)
+# g_s = get_gaussian_kernel(size, sigma)
+# g_ks = get_gaussian_kernel(size, ks)
+# blurred = cv.filter2D(image, -1, g_s)
+# blurred_2 = cv.filter2D(image, -1, g_ks)
+# cv.imshow("image", image)
+# cv.imshow("blurred", blurred)
+# cv.imshow("blurred_2", blurred_2)
+new = np.clip(blurred -p*blurred_2, 0, 255)
+final = thresholder(new,0.32,10.3)
+cv.imshow("new", new)
+cv.imshow("final", final)
 cv.waitKey(0)
