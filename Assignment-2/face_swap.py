@@ -11,6 +11,42 @@ def extract_index_nparray(nparray):
     return ind
 
 
+def calc_bary(pt, a, b, c):
+    ab = b - a
+    ac = c - a
+    ap = pt - a
+    nac = np.array([a[1] - c[1], c[0] - a[0]])
+    nab = np.array([a[1] - b[1], b[0] - a[0]])
+
+    beta = np.dot(ap, nac) / np.dot(ab, nac)
+    gamma = np.dot(ap, nab) / np.dot(ac, nab)
+    alpha = 1 - beta - gamma
+
+    return alpha, beta, gamma
+
+
+def get_affine_matrix(p1, p2, p3, p1p, p2p, p3p):
+    (x1, y1) = p1
+    (x2, y2) = p2
+    (x3, y3) = p3
+    (x1p, y1p) = p1p
+    (x2p, y2p) = p2p
+    (x3p, y3p) = p3p
+
+    m = np.array([[x1, y1, 1], [x2, y2, 1], [x3, y3, 1]])
+    m_inv = np.linalg.inv(m)
+    x_p = np.array([[x1p], [x2p], [x3p]])
+    y_p = np.array([[y1p], [y2p], [y3p]])
+    abc = np.dot(m_inv, x_p)
+    de = np.dot(m_inv, y_p)
+    result = np.hstack((abc, de, np.array([[0], [0], [1]]))).T
+    return result
+
+
+transform = get_affine_matrix((1, 2), (2, 3), (4, 1), (5, 6), (5, 3), (2, 4))
+ans = np.dot(transform, np.array([4, 1, 1]))
+print(ans)
+
 img1_c = cv.imread("Images\\Part 1\\bradley.png")
 img1 = cv.cvtColor(img1_c, cv.COLOR_BGR2GRAY)
 mask = np.zeros_like(img1)
@@ -93,8 +129,6 @@ for tr_ind in indexes_triangles:
     cropped_triangle1 = img1_c[y1: y1 + h1, x1:x1 + w1]
     cropped_tr1_mask = np.zeros_like(cropped_triangle1)
 
-
-
     cv.line(img1_c, tr1_pt1, tr1_pt2, (0, 0, 255), 1)
     cv.line(img1_c, tr1_pt2, tr1_pt3, (0, 0, 255), 1)
     cv.line(img1_c, tr1_pt3, tr1_pt1, (0, 0, 255), 1)
@@ -113,11 +147,9 @@ for tr_ind in indexes_triangles:
     cv.line(img2_c, tr2_pt2, tr2_pt3, (0, 0, 255), 1)
     cv.line(img2_c, tr2_pt3, tr2_pt1, (0, 0, 255), 1)
 
-
-
-cv.imshow("Bradley", img1_c)
-cv.imshow("Ryan", img2_c)
-cv.imshow("Cropped triangle 1", cropped_triangle1)
-cv.imshow("Cropped triangle 2", cropped_triangle2)
-cv.waitKey(0)
-cv.destroyAllWindows()
+# cv.imshow("Bradley", img1_c)
+# cv.imshow("Ryan", img2_c)
+# cv.imshow("Cropped triangle 1", cropped_triangle1)
+# cv.imshow("Cropped triangle 2", cropped_triangle2)
+# cv.waitKey(0)
+# cv.destroyAllWindows()
