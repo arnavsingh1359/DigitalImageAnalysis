@@ -13,7 +13,7 @@ from math import sqrt, pi
 from scipy.signal import medfilt
 from scipy import ndimage
 
-img = np.array(cv.imread("Pictures/part1/img_1.png"))
+img = np.array(cv.imread("Pictures/part1/mahajan.png"))
 
 # lum, alpha, beta = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2LAB), 3, axis=2)
 # hue, sat, value = np.array_split(cv.cvtColor(img, cv.COLOR_BGR2HSV), 3, axis=2)

@@ -48,7 +48,7 @@ def test_wlsfilter():
     """deprecated, need to remove rollaxis"""
     lambda_ = 0.1
     alpha = 1.2
-    image = cv2.imread("Pictures/part1/img_1.png")
+    image = cv2.imread("Pictures/part1/mahajan.png")
     # normalize image
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     out, detail = wlsfilter(image, lambda_, alpha)

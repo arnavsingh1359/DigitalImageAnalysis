@@ -2,7 +2,7 @@ import cv2 as cv
 import cv2.saliency as saliency
 import matplotlib.pyplot as plt
 
-image = cv.imread("Pictures\\part3\\img_1.png")
+image = cv.imread("Pictures\\part3\\mahajan.png")
 
 saliency = saliency.StaticSaliencyFineGrained_create()
 success, saliencyMap = saliency.computeSaliency(image)
