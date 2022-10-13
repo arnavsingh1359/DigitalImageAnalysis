@@ -1,19 +1,24 @@
 import math
 import cv2 as cv
 import numpy as np
+from skimage import filters
 
 
-def gaussian_pyramid(image, downscale=2, sigma=None):
-    out_shape = tuple(math.ceil(d / float(downscale)) for d in image.shape)
+def gaussian_pyramid(image, layers, downscale=2, sigma=None):
     if sigma is None:
         sigma = 2 * downscale / 6.0
-    kernel_size = 5
-    smoothed = cv.GaussianBlur(image, (kernel_size, kernel_size), sigma)
-    out = _bi_inter(smoothed, out_shape)
+
+    out = [image]
+    reduced = image
+    for i in range(layers - 1):
+        # out_shape = tuple(math.ceil(d / float(downscale)) for d in reduced.shape)
+        smoothed = filters.gaussian(reduced, sigma)
+        reduced = smoothed[::2, ::2]
+        out.append(reduced)
     return out
 
 
-def _bi_inter(image, dimension):
+def bi_inter(image, dimension):
     height = image.shape[0]
     width = image.shape[1]
     scale_x = width / (dimension[1])
@@ -44,3 +49,25 @@ def _bi_inter(image, dimension):
 
             new_image[i, j] = pixel
     return new_image.astype(np.uint8)
+
+
+def laplacian_pyramid(gp, tau):
+    p = []
+    for i in range(len(gp) - 1):
+        g = gp[i]
+        g_ = gp[i + 1]
+        g_expand = bi_inter(g_, g.shape)
+        lap = g - tau * g_expand
+        p.append(lap)
+
+    p.append(gp[-1])
+    return p
+
+
+def reconstruct_lap(lp):
+    p_img = lp[-1]
+    for i in range(len(lp) - 1):
+        n_l = lp[-2 - i]
+        e_p = bi_inter(p_img, n_l.shape)
+        p_img = e_p + n_l
+    return p_img
