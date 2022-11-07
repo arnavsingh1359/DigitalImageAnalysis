@@ -28,18 +28,19 @@ def fusion(img1, img2, mask, layers, tau):
     return final_image.astype("uint8")
 
 
-# im1 = np.float32(cv.imread("Images\\Part 1\\burt_apple.png", 0))
-# im2 = np.float32(cv.imread("Images\\Part 1\\burt_orange.png", 0))
+if __name__ == "__main__":
+    im1 = np.float32(cv.imread("Images\\Part 1\\burt_apple.png", 0))
+    im2 = np.float32(cv.imread("Images\\Part 1\\burt_orange.png", 0))
 
-# half = int(im1.shape[1] / 2)
-# masks = []
-# ma = np.hstack((np.ones((im1.shape[0], half), np.float32), np.zeros((im1.shape[0], half), np.float32)))
-# masks.append(ma)
-# laye = 7
-# ta = 1
-# out = fusion(im1, im2, ma, laye, ta)
-# cv.imshow("Apple", im1.astype("uint8"))
-# cv.imshow("Orange", im2.astype("uint8"))
-# cv.imshow("Fusion", out)
-# cv.waitKey(0)
-# cv.destroyAllWindows()
+    half = int(im1.shape[1] / 2)
+    masks = []
+    ma = np.hstack((np.ones((im1.shape[0], half), np.float32), np.zeros((im1.shape[0], half), np.float32)))
+    masks.append(ma)
+    laye = 7
+    ta = 1
+    out = fusion(im1, im2, ma, laye, ta)
+    cv.imshow("Apple", im1.astype("uint8"))
+    cv.imshow("Orange", im2.astype("uint8"))
+    cv.imshow("Fusion", out)
+    cv.waitKey(0)
+    cv.destroyAllWindows()

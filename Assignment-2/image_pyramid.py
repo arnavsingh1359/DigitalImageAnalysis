@@ -1,5 +1,3 @@
-import math
-import cv2 as cv
 import numpy as np
 from skimage import filters
 
@@ -11,7 +9,6 @@ def gaussian_pyramid(image, layers, downscale=2, sigma=None):
     out = [image]
     reduced = image
     for i in range(layers - 1):
-        # out_shape = tuple(math.ceil(d / float(downscale)) for d in reduced.shape)
         smoothed = filters.gaussian(reduced, sigma)
         reduced = smoothed[::2, ::2]
         out.append(reduced)

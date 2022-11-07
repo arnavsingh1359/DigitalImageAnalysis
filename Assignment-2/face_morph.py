@@ -1,10 +1,9 @@
-import os
-import shutil
 import cv2 as cv
 import numpy as np
 import dlib
 from make_video import create_video
-from blending import fusion
+import os
+import shutil
 
 
 def inverse_affine(affine_matrix):
@@ -16,7 +15,7 @@ def inverse_affine(affine_matrix):
     return result
 
 
-def getAffineTransform(src_tr, dst_tr):
+def get_affine_matrix(src_tr, dst_tr):
     (x1, y1) = src_tr[0]
     (x2, y2) = src_tr[1]
     (x3, y3) = src_tr[2]
@@ -34,7 +33,7 @@ def getAffineTransform(src_tr, dst_tr):
         result = np.hstack((abc, de)).T
         return result
     else:
-        return inverse_affine(getAffineTransform(dst_tr, src_tr))
+        return inverse_affine(get_affine_matrix(dst_tr, src_tr))
 
 
 def affine_transform(source, source_tr, destination_tr, size):
@@ -58,7 +57,7 @@ def morph_triangle(img1, img2, img, tr1, tr2, tr, alpha):
         tr1_rect.append(((tr1[f][0] - x1), (tr1[f][1] - y1)))
         tr2_rect.append(((tr2[f][0] - x2), (tr2[f][1] - y2)))
 
-    roi = np.zeros((h, w), np.float32)
+    roi = np.zeros((h, w, 3), np.float32)
     cv.fillConvexPoly(roi, np.int32(tr_rect), (1.0, 1.0, 1.0), 16, 0)
 
     img1_rect = img1[y1:y1 + h1, x1:x1 + w1]
@@ -66,10 +65,10 @@ def morph_triangle(img1, img2, img, tr1, tr2, tr, alpha):
     warp_img1 = affine_transform(img1_rect, tr1_rect, tr_rect, (w, h))
     warp_img2 = affine_transform(img2_rect, tr2_rect, tr_rect, (w, h))
 
-    alpha_mat = alpha * np.ones_like(img1_rect)
-    fused = fusion(warp_img1, warp_img2, alpha_mat, 3, 1)
+    img_rect = (1 - alpha) * warp_img1 + alpha * warp_img2
+    r = img[y:y + h, x:x + w]
 
-    img[y:y + h, x:x + w] = img[y:y + h, x:x + w] * (1 - roi) + fused * roi
+    img[y:y + h, x:x + w] = img[y:y + h, x:x + w] * (1 - roi) + img_rect * roi
 
 
 def get_corners(img):
@@ -87,21 +86,19 @@ def extract_index_nparray(nparray):
 
 if __name__ == "__main__":
     filename1 = "Images\\Part 1\\ryan.png"
-    filename2 = "Images\\Part 1\\bradley.png"
+    filename2 = "Images\\Part 1\\george.png"
 
-    img1 = cv.imread(filename1, 0)
-    img2 = cv.imread(filename2, 0)
+    img1 = cv.imread(filename1)
+    img2 = cv.imread(filename2)
 
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor("C:\\Users\\Arnav Singh\\PycharmProjects\\DigitalImageAnalysis"
                                      "\\shape_predictor_68_face_landmarks.dat")
-
     try:
         os.mkdir("Outs")
     except OSError as error:
         shutil.rmtree("Outs")
         os.mkdir("Outs")
-
     faces1 = detector(img1)
     landmark_points1 = []
     for face in faces1:
@@ -112,6 +109,7 @@ if __name__ == "__main__":
             landmark_points1.append((x, y))
     corners1 = get_corners(img1)
     landmark_points1.extend(corners1)
+    # print(landmark_points1)
 
     faces2 = detector(img2)
     landmark_points2 = []
@@ -123,6 +121,7 @@ if __name__ == "__main__":
             landmark_points2.append((x, y))
     corners2 = get_corners(img2)
     landmark_points2.extend(corners2)
+    # print(landmark_points2)
 
     points1 = np.array(landmark_points1, np.int32)
     points2 = np.array(landmark_points2, np.int32)
@@ -151,6 +150,11 @@ if __name__ == "__main__":
             triangle = [index_pt1, index_pt2, index_pt3]
             indexes_triangles.append(triangle)
 
+        # cv.line(img1, pt1, pt2, (0, 0, 255), 1)
+        # cv.line(img1, pt2, pt3, (0, 0, 255), 1)
+        # cv.line(img1, pt1, pt3, (0, 0, 255), 1)
+    # print(indexes_triangles)
+
     img1 = np.float32(img1)
     img2 = np.float32(img2)
     alphas = np.linspace(0, 1, 101)
@@ -166,6 +170,7 @@ if __name__ == "__main__":
 
         for tr_ind in indexes_triangles:
             x, y, z = tr_ind
+            # print(x, y, z)
             tr1 = [landmark_points1[x], landmark_points1[y], landmark_points1[z]]
             tr2 = [landmark_points2[x], landmark_points2[y], landmark_points2[z]]
             tr = [landmark_points[x], landmark_points[y], landmark_points[z]]
@@ -175,8 +180,13 @@ if __name__ == "__main__":
         img_morph = img_morph.astype("uint8")
         s = str(int(100 * alpha))
         s = s.zfill(3)
-        print(s)
+        # print(s)
         out_file = "Outs\\o" + s + ".png"
         cv.imwrite(out_file, img_morph)
 
-    create_video("Outs", "out_fused.mp4")
+    create_video("Outs", "out.mp4")
+    # cv.imshow("morphed", img_morph)
+    # cv.waitKey(0)
+    # cv.destroyAllWindows()
+    # break
+    # cv.imshow("Source", img1)
